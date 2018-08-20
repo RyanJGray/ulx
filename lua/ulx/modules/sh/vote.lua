@@ -98,8 +98,6 @@ end
 
 
 
-
-
 local function voteDone( t )
 	local results = t.results
 	local winner
@@ -150,92 +148,6 @@ end
 local stopvote = ulx.command( CATEGORY_NAME, "ulx stopvote", ulx.stopVote, "!stopvote" )
 stopvote:defaultAccess( ULib.ACCESS_SUPERADMIN )
 stopvote:help( "Stops a vote in progress." )
-
-local function voteMapDone2( t, changeTo, ply )
-	local shouldChange = false
-
-	if t.results[ 1 ] and t.results[ 1 ] > 0 then
-		ulx.logServAct( ply, "#A approved the votemap" )
-		shouldChange = true
-	else
-		ulx.logServAct( ply, "#A denied the votemap" )
-	end
-
-	if shouldChange then
-		ULib.consoleCommand( "changelevel " .. changeTo .. "\n" )
-	end
-end
-
-local function voteMapDone( t, argv, ply )
-	local results = t.results
-	local winner
-	local winnernum = 0
-	for id, numvotes in pairs( results ) do
-		if numvotes > winnernum then
-			winner = id
-			winnernum = numvotes
-		end
-	end
-
-	local ratioNeeded = GetConVarNumber( "ulx_votemap2Successratio" )
-	local minVotes = GetConVarNumber( "ulx_votemap2Minvotes" )
-	local str
-	local changeTo
-	-- Figure out the map to change to, if we're changing
-	if #argv > 1 then
-		changeTo = t.options[ winner ]
-	else
-		changeTo = argv[ 1 ]
-	end
-
-	if (#argv < 2 and winner ~= 1) or not winner or winnernum < minVotes or winnernum / t.voters < ratioNeeded then
-		str = "Vote results: Vote was unsuccessful."
-	elseif ply:IsValid() then
-		str = "Vote results: Option '" .. t.options[ winner ] .. "' won, changemap pending approval. (" .. winnernum .. "/" .. t.voters .. ")"
-
-		ulx.doVote( "Accept result and changemap to " .. changeTo .. "?", { "Yes", "No" }, voteMapDone2, 30000, { ply }, true, changeTo, ply )
-	else -- It's the server console, let's roll with it
-		str = "Vote results: Option '" .. t.options[ winner ] .. "' won. (" .. winnernum .. "/" .. t.voters .. ")"
-		ULib.tsay( _, str )
-		ulx.logString( str )
-		ULib.consoleCommand( "changelevel " .. changeTo .. "\n" )
-		return
-	end
-
-	ULib.tsay( _, str ) -- TODO, color?
-	ulx.logString( str )
-	if game.IsDedicated() then Msg( str .. "\n" ) end
-end
-
-function ulx.votemap2( calling_ply, ... )
-	local argv = { ... }
-
-	if ulx.voteInProgress then
-		ULib.tsayError( calling_ply, "There is already a vote in progress. Please wait for the current one to end.", true )
-		return
-	end
-
-	for i=2, #argv do
-	    if ULib.findInTable( argv, argv[ i ], 1, i-1 ) then
-	        ULib.tsayError( calling_ply, "Map " .. argv[ i ] .. " was listed twice. Please try again" )
-	        return
-	    end
-	end
-
-	if #argv > 1 then
-		ulx.doVote( "Change map to..", argv, voteMapDone, _, _, _, argv, calling_ply )
-		ulx.fancyLogAdmin( calling_ply, "#A started a votemap with options" .. string.rep( " #s", #argv ), ... )
-	else
-		ulx.doVote( "Change map to " .. argv[ 1 ] .. "?", { "Yes", "No" }, voteMapDone, _, _, _, argv, calling_ply )
-		ulx.fancyLogAdmin( calling_ply, "#A started a votemap for #s", argv[ 1 ] )
-	end
-end
-local votemap2 = ulx.command( CATEGORY_NAME, "ulx votemap2", ulx.votemap2, "!votemap2" )
-votemap2:addParam{ type=ULib.cmds.StringArg, completes=ulx.maps, hint="map", error="invalid map \"%s\" specified", ULib.cmds.restrictToCompletes, ULib.cmds.takeRestOfLine, repeat_min=1, repeat_max=10 }
-votemap2:defaultAccess( ULib.ACCESS_ADMIN )
-votemap2:help( "Starts a public map vote." )
-if SERVER then ulx.convar( "votemap2Successratio", "0.5", _, ULib.ACCESS_ADMIN ) end -- The ratio needed for a votemap2 to succeed
-if SERVER then ulx.convar( "votemap2Minvotes", "3", _, ULib.ACCESS_ADMIN ) end -- Minimum votes needed for votemap2
 
 
 
@@ -402,14 +314,3 @@ voteban:defaultAccess( ULib.ACCESS_ADMIN )
 voteban:help( "Starts a public ban vote against target." )
 if SERVER then ulx.convar( "votebanSuccessratio", "0.7", _, ULib.ACCESS_ADMIN ) end -- The ratio needed for a voteban to succeed
 if SERVER then ulx.convar( "votebanMinvotes", "3", _, ULib.ACCESS_ADMIN ) end -- Minimum votes needed for voteban
-
--- Our regular votemap command
-local votemap = ulx.command( CATEGORY_NAME, "ulx votemap", ulx.votemap, "!votemap" )
-votemap:addParam{ type=ULib.cmds.StringArg, completes=ulx.votemaps, hint="map", ULib.cmds.takeRestOfLine, ULib.cmds.optional }
-votemap:defaultAccess( ULib.ACCESS_ALL )
-votemap:help( "Vote for a map, no args lists available maps." )
-
--- Our veto command
-local veto = ulx.command( CATEGORY_NAME, "ulx veto", ulx.votemapVeto, "!veto" )
-veto:defaultAccess( ULib.ACCESS_ADMIN )
-veto:help( "Veto a successful votemap." )
